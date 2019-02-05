@@ -77,7 +77,7 @@ function events(client, threshold, onResult) {
           }
         };
 
-        // ... and update the result.
+        // ... and update the result
         // - eye direction doesn't have a power rating, so we send every change
         // - power threshold
         // - [question] it should verify that update is completed ... but here it changes to true on first update! not on the last update ...
