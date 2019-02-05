@@ -10,6 +10,8 @@
 
 const Cortex = require('../lib/cortex')
 
+// This is the main module that gets evaluated when you run it from the
+// command line
 if (require.main === module) {
   process.on('unhandledRejection', (err) => { throw err })
 

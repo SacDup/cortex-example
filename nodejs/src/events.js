@@ -7,7 +7,7 @@
  * combine them together into a single event that only fires when something's
  * changed.
  *
- * It also accepts a threshold for hwo confident it should be before it
+ * It also accepts a threshold for how confident it should be before it
  * reports a result.
  *
  * If require()d as a library, it should be called with a callback function
@@ -18,6 +18,17 @@
  * If you run it from the command line it will do this for you and just print
  * out events as they happen.
  *
+ * Format of data : facial expressions and mental commands
+ * subs[1].fac.cols
+ * data.eyeAct    eye direction
+ * data.uAct      brows action
+ * data.uPow      brows power rating
+ * data.lAct      mouth action
+ * data.lPow      mouth power rating
+ * 
+ * subs[0].com.cols
+ * data.act       
+ * data.pow
  */
 
 const Cortex = require("../lib/cortex");
@@ -33,12 +44,18 @@ const columns2obj = headers => cols => {
 };
 
 function events(client, threshold, onResult) {
+
+  // First we're setting up the streams of data
+  // - create session
+  // - suscribe to streams
+  // - verify that data is not empty
   return client
     .createSession({ status: "open" })
     .then(() => client.subscribe({ streams: ["com", "fac"] }))
     .then(subs => {
       if (!subs[0].com || !subs[1].fac) throw new Error("failed to subscribe");
-
+      
+      // this will save temporarily the result 
       const current = {
         command: "neutral",
         eyes: "neutral",
@@ -46,11 +63,12 @@ function events(client, threshold, onResult) {
         mouth: "neutral"
       };
 
-      // Here we listen for facial expressions
+      // Then we listen to facial expressions when "fac" comes from the stream
+      // - formatting data subs[1].fac.cols to key:value pairs
+      // - update function
       const fac2obj = columns2obj(subs[1].fac.cols);
       const onFac = ev => {
         const data = fac2obj(ev.fac);
-
         let updated = false;
         let update = (k, v) => {
           if (current[k] !== v) {
@@ -59,16 +77,20 @@ function events(client, threshold, onResult) {
           }
         };
 
-        // Eye direction doesn't have a power rating, so we send every change
+        // ... and update the result.
+        // - eye direction doesn't have a power rating, so we send every change
+        // - power threshold
+        // - [question] it should verify that update is completed ... but here it changes to true on first update! not on the last update ...
         update("eyes", data.eyeAct);
         if (data.uPow >= threshold) update("brows", data.uAct);
         if (data.lPow >= threshold) update("mouth", data.lAct);
-
         if (updated) onResult(Object.assign({}, current));
       };
       client.on("fac", onFac);
 
-      // And here we do mental commands
+      // And here we do mental commands when "com" comes from the stream
+      // - formatting subs[0].com.cols to key:value pairs
+      // - updating result
       const com2obj = columns2obj(subs[0].com.cols);
       const onCom = ev => {
         const data = com2obj(ev.com);
@@ -79,7 +101,10 @@ function events(client, threshold, onResult) {
       };
       client.on("com", onCom);
 
-      // Return a function to call to finish up
+      // Last, we return a function to call to finish up
+      // - unsuscribe streams
+      // - close session
+      // - remove listeners
       return () =>
         client
           .unsubscribe({ streams: ["com", "fac"] })
@@ -91,23 +116,28 @@ function events(client, threshold, onResult) {
     });
 }
 
+// Small function to format a string to a specified length
 const pad = (str, n) =>
   str + new Array(Math.max(0, n - str.length + 1)).join(" ");
 
-// This is the main module that gets evaluated when you run it from the
-// command line
+// This is the main module that gets evaluated when you run it from the command line
 if (require.main === module) {
+  // Node js process other errors
   process.on("unhandledRejection", err => {
     throw err;
   });
-
-  // We can set LOG_LEVEL=2 or 3 for more detailed errors
+  
+  // Arguments
+  // - we can set LOG_LEVEL=2 or 3 for more detailed errors
+  // - threshold is set here
   const verbose = process.env.LOG_LEVEL || 1;
   const options = { verbose, threshold: 0 };
   const threshold = 0;
 
   const client = new Cortex(options);
 
+  // Client 
+  // 
   client.ready.then(() => client.init()).then(() => {
     console.log(
       `Watching for facial expressions and mental commands above ${Math.round(
